@@ -18,6 +18,7 @@ library('tidymv')
 library('cowplot')
 library('kableExtra')
 library('gridExtra')
+library('here')
 
 
 knitr::opts_chunk$set(message=FALSE, 
@@ -26,7 +27,7 @@ knitr::opts_chunk$set(message=FALSE,
 ```
 
 ```{r, read in data}
-all_kids <- read.csv('./ha_matched_kids.csv') %>% # contains the N=38 kids who are hearing age-matched
+all_kids <- read.csv(here::here('./ha_matched_kids.csv')) %>% # contains the N=38 kids who are hearing age-matched
   filter(Condition!='nonsense') %>% # only going to look at difference between MP and real 
   filter(TargetWord!='tag' & TargetWord!='dog') %>% # 7 children heard dog/tog instead of rice/wice; all TH
   mutate(elog=as.numeric(elog)) %>%
@@ -41,17 +42,20 @@ all_kids$start.event <- all_kids$Time == 300 # mark the beginning of each speake
 
 # make sure the data to configure autocorrelation are properly ordered and classified
 all_kids2 <- all_kids %>%
-  distinct(ChildStudyID, .keep_all = T) %>%
+  distinct(ChildStudyID, .keep_all = TRUE) %>%
   group_by(ResearchID) %>% 
-  mutate(num_visit = str_sub(Study, -1)) %>% # classify which visit it was (first, second, or third)
+  # classify which visit it was (first, second, or third)
+  mutate(num_visit = str_sub(Study, -1)) %>% 
   select(num_visit, ChildStudyID, ResearchID) %>%
   merge(., all_kids, by=c("ResearchID", "ChildStudyID")) %>%
   arrange(ChildStudyID, Group, TargetWord, Time) %>%
-  mutate(WordGroup=as.factor(WordGroup),
-  TargetWord=as.factor(TargetWord),
-  ChildStudyID=as.factor(ChildStudyID),
-  num_visit=as.factor(num_visit),
-  Group=as.factor(Group)) 
+  mutate(
+    WordGroup = as.factor(WordGroup),
+    TargetWord = as.factor(TargetWord),
+    ChildStudyID = as.factor(ChildStudyID),
+    num_visit = as.factor(num_visit),
+    Group = as.factor(Group)
+  ) 
 
 #write.csv(all_kids2, '/Users/megcychosz/Google Drive/CI_mispron/CI_mispron/project_results/all_kids2.csv') # write out dataframe for replication script
 ```
@@ -59,68 +63,75 @@ all_kids2 <- all_kids %>%
 ```{r, summary stats for methods}
 # how many kids in each group
 group_num <- all_kids2 %>%
-  distinct(ChildStudyID, .keep_all = T) %>% 
+  distinct(ChildStudyID, .keep_all = TRUE) %>% 
   count(Group)
   
 # how many children contributed data at two timepoints?
 two_tp <- all_kids2 %>%
   group_by(ResearchID) %>% 
-  distinct(ChildStudyID, .keep_all = T) %>%
+  distinct(ChildStudyID, .keep_all = TRUE) %>%
   add_count() %>%
-  distinct(ResearchID, .keep_all = T) %>%
-  filter(n=='2') 
+  distinct(ResearchID, .keep_all = TRUE) %>%
+  filter(n == 2) 
 
 # how many trials from each group?
 trials <- all_kids2 %>%
-  filter(start.event==TRUE) %>%
+  filter(start.event == TRUE) %>%
   count(Group)
 
 # AAE & Late Talker: no kids were late talkers or received in AAE
-demo_data <- read.csv("../BU2017_results/data/scores.csv") %>%
-  dplyr::select(ResearchID,AAE,LateTalker) %>%
-  merge(., all_kids2, by="ResearchID") %>%
-  distinct(ResearchID, .keep_all = T)
+
+if (file.exists("../BU2017_results/data/scores.csv")) {
+  demo_data <- read.csv("../BU2017_results/data/scores.csv") %>%
+    select(ResearchID,AAE,LateTalker) %>%
+    merge(., all_kids2, by="ResearchID") %>%
+    distinct(ResearchID, .keep_all = TRUE)  
+}
+
 
 # info for tables  
 stat_sum_ha <- all_kids2 %>% 
-  distinct(ChildStudyID, .keep_all = T) %>% 
+  distinct(ChildStudyID, .keep_all = TRUE) %>% 
   group_by(Group) %>% 
-  summarize(mean_hearing_age = mean(hearing_age),
-            sd_hearing_age = sd(hearing_age),
-            min_hage = min(hearing_age),
-            max_hage = max(hearing_age),
-            mean_age = mean(EVT_Age),
-            sd_age = sd(EVT_Age),
-            min_age = min(EVT_Age),
-            max_age = max(EVT_Age),
-            mean_mated = mean(Maternal_Education_Level),
-            sd_mated = sd(Maternal_Education_Level),
-            
-            mean_evt_gsv = mean(EVT_GSV),
-            sd_evt_gsv = sd(EVT_GSV),
-            min_evt_gsv = min(EVT_GSV),
-            max_evt_gsv = max(EVT_GSV),
-            
-            mean_evt_stan = mean(EVT_Standard),
-            sd_evt_stan = sd(EVT_Standard),
-            min_evt_stan = min(EVT_Standard),
-            max_evt_stan = max(EVT_Standard)) %>%
-  
-  mutate_at(vars(-Group), funs(round(., 2))) %>%
-  distinct(Group, .keep_all = T) %>%
-  mutate(`Chronological Age: months` = paste(mean_age,"(",sd_age,")",min_age,"-",max_age),
-         `Hearing Age: months` = paste(mean_hearing_age,"(",sd_hearing_age,")",min_hage,"-",max_hage),
-         `Maternal Education Level` = paste(mean_mated,"(",sd_mated,")"),
-         `EVT-2 GSV Scores` = paste(mean_evt_gsv,"(",sd_evt_gsv,")",min_evt_gsv,"-",max_evt_gsv),
-         `EVT-2 Stan. Scores` = paste(mean_evt_stan,"(",sd_evt_stan,")",min_evt_stan,"-",max_evt_stan)) %>%
+  summarize(
+    mean_hearing_age = mean(hearing_age),
+    sd_hearing_age = sd(hearing_age),
+    min_hage = min(hearing_age),
+    max_hage = max(hearing_age),
+    mean_age = mean(EVT_Age),
+    sd_age = sd(EVT_Age),
+    min_age = min(EVT_Age),
+    max_age = max(EVT_Age),
+    mean_mated = mean(Maternal_Education_Level),
+    sd_mated = sd(Maternal_Education_Level),
+    
+    mean_evt_gsv = mean(EVT_GSV),
+    sd_evt_gsv = sd(EVT_GSV),
+    min_evt_gsv = min(EVT_GSV),
+    max_evt_gsv = max(EVT_GSV),
+    
+    mean_evt_stan = mean(EVT_Standard),
+    sd_evt_stan = sd(EVT_Standard),
+    min_evt_stan = min(EVT_Standard),
+    max_evt_stan = max(EVT_Standard)
+  ) %>%
+  mutate_at(vars(-Group), function(x) round(x, 2)) %>%
+  distinct(Group, .keep_all = TRUE) %>%
+  mutate(
+    `Chronological Age: months` = paste0(mean_age," (",sd_age,") ",min_age,"--",max_age),
+    `Hearing Age: months` = paste0(mean_hearing_age," (",sd_hearing_age,") ",min_hage,"--",max_hage),
+    `Maternal Education Level` = paste0(mean_mated," (",sd_mated,") "),
+    `EVT-2 GSV Scores` = paste0(mean_evt_gsv," (",sd_evt_gsv,") ",min_evt_gsv,"--",max_evt_gsv),
+    `EVT-2 Stan. Scores` = paste0(mean_evt_stan," (",sd_evt_stan,") ",min_evt_stan,"--",max_evt_stan)
+  ) %>%
   select(tail(names(.),5))
 
 stat_gender <- all_kids2 %>%
-  distinct(ChildStudyID, .keep_all = T) %>% 
+  distinct(ChildStudyID, .keep_all = TRUE) %>% 
   group_by(Group, Female) %>%
   count() %>%
-  spread(Female,n) %>%
-  mutate(`Girls, Boys`=paste(`1`,',', `0`)) %>%
+  spread(Female, n) %>%
+  mutate(`Girls, Boys` = paste0(`1`, ', ', `0`)) %>%
   select(Group, `Girls, Boys`) 
 ```
 
@@ -128,9 +139,11 @@ stat_gender <- all_kids2 %>%
 stat_gender %>%
   cbind(., stat_sum_ha) %>%
   rename(`Hearing Status`=Group) %>%
-  knitr::kable(., booktabs=T, 
-               caption= "Participant demographic information (N=19 matches), Mean (SD), range.",
-             row.names = FALSE) %>% 
+  knitr::kable(
+    booktabs = TRUE, 
+    caption= "Participant demographic information (N=19 matches), Mean (SD), range.",
+    row.names = FALSE
+  ) %>% 
   kable_styling() %>%
   kableExtra::kable_styling(latex_options = "hold_position")
 ```
@@ -138,121 +151,152 @@ stat_gender %>%
 ```{r, contending with autocorrelation, fig.show='hide',cache=T}
 #I first have to factor out autocorrelation between looks. 
 # fit a model with the data properly ordered
-m1_all <- bam(elog ~ Condition.ord +
-                  s(Time) + 
-                  s(Time, by=Condition.ord) +
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs="fs", m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs="fs", m=1),
-                  data=all_kids2, method="fREML") 
+m1_all <- bam(
+  elog ~ Condition +
+    s(Time) + 
+    s(Time, by = Condition.ord) +
+    s(Time, ChildStudyID, bs = 'fs', m = 1) + 
+    s(Time, TargetWord, bs = 'fs', m = 1) +
+    s(Time, num_visit, bs = "fs", m = 1) +
+    s(Time, ChildStudyID, by = Condition.ord, bs = "fs", m = 1),
+  data = all_kids2, 
+  method = "fREML"
+) 
 
-m_acf_all <- acf_resid(m1_all) # plot the autocorrelation and take a look at correlation between timepoints - yikes!
+# plot the autocorrelation and take a look at 
+# correlation between timepoints - yikes!
+m_acf_all <- acf_resid(m1_all) 
 
-r1_all <- start_value_rho(m1_all) # first we calculate rho from the original model 
+# first we calculate rho from the original model 
+r1_all <- start_value_rho(m1_all) 
 
-m_AR1_all <- bam(elog ~ Condition.ord +
-                  s(Time) + 
-                  s(Time, by=Condition.ord) +
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs="fs", m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs="fs", m=1),
-                         data=all_kids2, method="fREML",
-                         rho=r1_all, AR.start=start.event)
+m_AR1_all <- bam(
+  elog ~ Condition +
+    s(Time) + 
+    s(Time, by = Condition.ord) +
+    s(Time, ChildStudyID, bs = "fs", m = 1) + 
+    s(Time, TargetWord, bs = "fs", m = 1) +
+    s(Time, num_visit, bs = "fs", m = 1) +
+    s(Time, ChildStudyID, by = Condition.ord, bs = "fs", m = 1),
+  data = all_kids2, 
+  method = "fREML",
+  rho = r1_all, 
+  AR.start = start.event
+)
 
 # we can plot the improvement here:
-m_acf_rmv_all <- acf_resid(m_AR1_all) # took care of the problem!
+m_acf_rmv_all <- acf_resid(m_AR1_all) 
+# took care of the problem!
 ```
 
-```{r, compare word to word-condition model, eval=FALSE}
-#Now, I have to see if I am justified in adding a group-level effect to the condition-only model. 
 
-condition_base <- all_kids2 %>%
-  bam(elog ~      Condition.ord + 
-                  s(Time) + 
-                  s(Time, by=Condition.ord) +
-                  s(Time, ChildStudyID, bs='fs', m=1) +
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs='fs', m=1), # we purposely don't include a smooth of Time by Child by Condition because we're comparing 
-                  data=.,           # this nested model to one with GroupCondition below
-                  rho=r1_all,
-                  method="ML",
-                  family="scat",
-                  AR.start=start.event)
+
+```{r, compare word to word-condition model, eval=FALSE}
+# Now, I have to see if I am justified in adding a group-level 
+# effect to the condition-only model. 
+
+condition_base <- bam(
+  elog ~ Condition + 
+    s(Time) + 
+    s(Time, by=Condition.ord) +
+    s(Time, ChildStudyID, bs = "fs", m = 1) +
+    s(Time, TargetWord, bs = "fs", m = 1) +
+      # we purposely don't include a smooth of Time by Child by Condition because we're comparing 
+      # this nested model to one with GroupCondition below
+    s(Time, num_visit, bs = "fs", m = 1), 
+    data = all_kids2,           
+    rho = r1_all,
+    method = "ML",
+    family = "scat",
+    AR.start = start.event
+)
 
 all_kids2$GroupCondition <- interaction(all_kids2$Group,all_kids2$Condition)
 
-interact_model <- all_kids2 %>%
-  bam(elog ~      GroupCondition + 
-                  s(Time) +
-                  s(Time, by=GroupCondition) +
-                  s(Time, ChildStudyID, bs='fs', m=1) +
-                  s(Time, TargetWord, bs='fs', m=1) + 
-                  s(Time, num_visit, bs='fs', m=1),
-                  data=.,
-                  rho=r1_all,
-                  method="ML", 
-                  family="scat",
-                  AR.start=start.event)
+interact_model <- bam(
+  elog ~ GroupCondition + 
+    s(Time) +
+    s(Time, by = GroupCondition) +
+    s(Time, ChildStudyID, bs = "fs", m = 1) +
+    s(Time, TargetWord, bs = "fs", m = 1) + 
+    s(Time, num_visit, bs = "fs", m = 1),
+    data = all_kids2,
+    rho = r1_all,
+    method = "ML", 
+    family = "scat",
+    AR.start = start.event
+)
 interact_model_summary <- summary(interact_model)
 
-compareML(condition_base,interact_model,print.output = T) # I am justified in continuing the modeling 
-AIC(condition_base,interact_model) # interact model has much lower AIC
+compareML(
+  condition_base,
+  interact_model,
+  print.output = TRUE
+) 
+# I am justified in continuing the modeling 
+
+# interact model has much lower AIC
+AIC(condition_base, interact_model) 
 
 interact_model_freml <- all_kids2 %>%
   bam(elog ~      GroupCondition + 
                   s(Time) +
                   s(Time, by=GroupCondition) +
-                  s(Time, ChildStudyID, bs='fs', m=1) +
-                  s(Time, TargetWord, bs='fs', m=1) + 
-                  s(Time, num_visit, bs='fs', m=1),
+                  s(Time, ChildStudyID, bs = "fs", m = 1) +
+                  s(Time, TargetWord, bs = "fs", m = 1) + 
+                  s(Time, num_visit, bs = "fs", m = 1),
                   data=.,
                   rho=r1_all,
                   method="fREML", 
                   family="scat",
                   AR.start=start.event)
 
-saveRDS(condition_base, "../hearingage_matched_models/condition-base-model.Rdata")
-saveRDS(interact_model, "../hearingage_matched_models/interact-model.Rdata")
-saveRDS(interact_model_freml, "../hearingage_matched_models/interact-model-freml.Rdata")
-saveRDS(interact_model_summary, "../hearingage_matched_models/interact-model-summary.Rdata")
+dir.create(here::here("hearingage_matched_models"), showWarnings = FALSE)
+saveRDS(condition_base, here::here("hearingage_matched_models/condition-base-model.Rdata"))
+saveRDS(interact_model, here::here("hearingage_matched_models/interact-model.Rdata"))
+saveRDS(interact_model_freml, here::here("hearingage_matched_models/interact-model-freml.Rdata"))
+saveRDS(interact_model_summary, here::here("hearingage_matched_models/interact-model-summary.Rdata"))
 ```
 
 ```{r, create ordered factors}
-#Next, I'll evaluate if the difference between real and mispronounced words is significant for the two hearing groups **separately**. First, I have to create two ordered factors for a 2x2 relationship of word and condition. 
+# Next, I'll evaluate if the difference between real and mispronounced words is
+# significant for the two hearing groups **separately**. First, I have to create
+# two ordered factors for a 2x2 relationship of word and condition.
 
-# we have to create *two* reference levels: one for children with CIs and one for children with TH
-# Unlike a binary difference smooth, an ordered model doesn't lump intercepts and smooths together
-# and I'd like to be able to tease them apart in these models
+# we have to create *two* reference levels: one for children with CIs and one
+# for children with TH Unlike a binary difference smooth, an ordered model
+# doesn't lump intercepts and smooths together and I'd like to be able to tease
+# them apart in these models
+# contrast coding
 all_kids2$THReal0 <- as.ordered(all_kids2$Group=='NormalHearing' & all_kids2$Condition=='real')
-contrasts(all_kids2$THReal0) <- "contr.treatment" # contrast coding
+contrasts(all_kids2$THReal0) <- "contr.treatment" 
 
 all_kids2$CIReal0 <- as.ordered(all_kids2$Group=='CochlearImplant' & all_kids2$Condition=='real')
 contrasts(all_kids2$CIReal0) <- "contr.treatment"
 ```
 
 ```{r, fit the 2x2 model, eval=FALSE}
-groupcond_model <- all_kids2 %>%
-  bam(elog ~      Group + # ordered variable
+groupcond_model <- bam(
+  elog ~      Group + # ordered variable
                   THReal0 + 
                   CIReal0 + 
                   s(Time) +
                   s(Time, by=Group) +
                   s(Time, by=THReal0) + 
                   s(Time, by=CIReal0) +
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs='fs', m=1), # we purposely don't include a smooth of Time by Child by Group because that's not a hierarchical variable
-                  data=.,
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+      # we purposely don't include a smooth of Time by Child by Group because that's not a hierarchical variable
+                  s(Time, num_visit, bs = "fs", m = 1), 
+                  data=all_kids2,
                   rho=r1_all,
                   method="fREML",
                   family="scat",
                   AR.start=start.event)
 
 groupcond_model_summary <- summary(groupcond_model)
-saveRDS(groupcond_model, "../hearingage_matched_models/group-cond-model.Rdata")
-saveRDS(groupcond_model_summary, "../hearingage_matched_models/group-cond-model-summary.Rdata")
+saveRDS(groupcond_model, here::here("hearingage_matched_models/group-cond-model.Rdata"))
+saveRDS(groupcond_model_summary, here::here("hearingage_matched_models/group-cond-model-summary.Rdata"))
 ```
 
 ```{r, model criticism for 2x2 model, eval=FALSE}
@@ -278,9 +322,9 @@ diff_model <- all_kids2 %>%
                   s(Time, by=Group) +
                   s(Time, by=IsReal) + # this represents real-MP difference for CI listeners
                   s(Time, by=IsTHReal) + # this represents real-MP difference in TH vs. CI groups
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs='fs', m=1), # same here: Group isn't a hierarchical structure
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1), # same here: Group isn't a hierarchical structure
                   data=.,
                   rho=r1_all,
                   method="fREML",
@@ -470,10 +514,10 @@ looks_a <- read.csv("../BU2017_results/data/scores.csv") %>%
   filter(TargetWord!='dog' & TargetWord!='tag') # 7 kids with TH heard dog~tog instead of rice~wice
 
 # get hearing age for all of these kids w/ CIs
-hearing_age <- read.csv('../participant_info/hearing_age.csv') %>% distinct(ChildStudyID, .keep_all = T)
+hearing_age <- read.csv('../participant_info/hearing_age.csv') %>% distinct(ChildStudyID, .keep_all = TRUE)
 
 looks <- looks_a %>%
-  distinct(ChildStudyID, .keep_all = T) %>%
+  distinct(ChildStudyID, .keep_all = TRUE) %>%
   group_by(ResearchID) %>% 
   mutate(num_visit = str_sub(Study, -1)) %>% # classify which visit it was (first, second, or third)
   dplyr::select(num_visit, ChildStudyID, ResearchID) %>%
@@ -494,7 +538,7 @@ looks <- looks_a %>%
 ```{r, stan-meas-table}
 # create a table to report standardized measures, by group
 looks %>%
-  distinct(ChildStudyID, .keep_all = T) %>%
+  distinct(ChildStudyID, .keep_all = TRUE) %>%
   filter(GFTA_Standard!='NA' & EVT_GSV!='NA') %>% # leaves us with 24 TH and 33 CI
   group_by(Group) %>%
   summarize(mean_evt=mean(EVT_Standard),
@@ -529,7 +573,7 @@ looks %>%
 # in the correlations
 
 allkids_gender <- looks %>%
-  distinct(ChildStudyID, .keep_all = T) %>% 
+  distinct(ChildStudyID, .keep_all = TRUE) %>% 
   filter(GFTA_Standard!='NA' & EVT_GSV!='NA') %>% # leaves us with 24 TH and 33 CI
   group_by(Group, Female) %>%
   count() %>%
@@ -538,7 +582,7 @@ allkids_gender <- looks %>%
   select(Group, `Girls, Boys`) 
 
 looks %>%
-  distinct(ChildStudyID, .keep_all = T) %>%
+  distinct(ChildStudyID, .keep_all = TRUE) %>%
   filter(GFTA_Standard!='NA' & EVT_GSV!='NA') %>% # leaves us with 24 TH and 33 CI
   group_by(Group) %>%
   summarize(mean_hearing_age = mean(hearing_age),
@@ -553,7 +597,7 @@ looks %>%
             mean_mated = mean(Maternal_Education_Level),
             sd_mated = sd(Maternal_Education_Level)) %>%
   mutate_at(vars(-Group), funs(round(., 2))) %>%
-  distinct(Group, .keep_all = T) %>%
+  distinct(Group, .keep_all = TRUE) %>%
   mutate(`Chronological Age: months` = paste(mean_age,"(",sd_age,")",min_age,"-",max_age),
          `Hearing Age: months` = paste(mean_hearing_age,"(",sd_hearing_age,")",min_hage,"-",max_hage),
          `Maternal Education Level` = paste(mean_mated,"(",sd_mated,")")) %>%
@@ -589,10 +633,10 @@ m1_ci <- bam(elog ~ Condition.ord +
                   s(Time) +
                   s(Time, by=Condition.ord) +
                   te(Time,EVT_Age,by=Condition.ord) +
-                  s(Time, ChildStudyID, bs="fs", m=1) +
-                  s(Time, TargetWord, bs="fs", m=1) +
-                  s(Time, num_visit, bs="fs", m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1),
+                  s(Time, ChildStudyID, bs = "fs", m = 1) +
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) +
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1),
                   data=ci_kids, method="fREML") 
 
 m_acf_ci<- acf_resid(m1_ci) # plot the autocorrelation and take a look at correlation between timepoints - yikes!
@@ -605,10 +649,10 @@ m_AR1_ci <- bam(elog ~   Condition.ord +
                          s(Time) +
                          s(Time, by=Condition.ord) +
                          te(Time,EVT_Age,by=Condition.ord) +
-                         s(Time, ChildStudyID, bs="fs", m=1) +
-                         s(Time, TargetWord, bs="fs", m=1) +
-                         s(Time, num_visit, bs="fs", m=1) +
-                         s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1),
+                         s(Time, ChildStudyID, bs = "fs", m = 1) +
+                         s(Time, TargetWord, bs = "fs", m = 1) +
+                         s(Time, num_visit, bs = "fs", m = 1) +
+                         s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1),
                          data=ci_kids, method="fREML",
                          rho=r1_ci, AR.start=start.event)
 saveRDS(m_AR1_ci, "../all_child_models/ci/ARI-ci.Rdata") 
@@ -632,10 +676,10 @@ evt_model_CI <- ci_kids %>%
                   s(Time, by=Condition.ord) +
                   te(Time,EVT_Age,by=Condition.ord) + 
                   te(Time,EVT_GSV,by=Condition.ord) + # ti requires us to specify individual smooths; te does not
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs="fs", m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1), 
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) +
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1), 
                   data=.,
                   rho=r1_ci,
                   method="ML",
@@ -652,10 +696,10 @@ gfta_model_CI <- ci_kids %>%
                   s(Time, by=Condition.ord) +
                   te(Time,EVT_Age,by=Condition.ord) + 
                   te(Time,GFTA_Standard,by=Condition.ord) + 
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs="fs", m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1), 
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) +
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1), 
                   data=.,
                   rho=r1_ci,
                   method="ML",
@@ -673,10 +717,10 @@ gfta_model_CI_freml <- ci_kids %>%
                   s(Time, by=Condition.ord) +
                   te(Time,EVT_Age,by=Condition.ord) + 
                   te(Time,GFTA_Standard,by=Condition.ord) + 
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs="fs", m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1), 
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) +
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1), 
                   data=.,
                   rho=r1_ci,
                   method="fREML",
@@ -695,10 +739,10 @@ gfta_evt_model_CI <- ci_kids %>%
                   te(Time,EVT_Age,by=Condition.ord) + 
                   te(Time,GFTA_Standard,by=Condition.ord) + 
                   te(Time,EVT_GSV,by=Condition.ord) + 
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) + 
-                  s(Time, num_visit, bs='fs', m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1), 
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) + 
+                  s(Time, num_visit, bs = "fs", m = 1) +
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1), 
                   data=.,
                   rho=r1_ci,
                   method="ML",
@@ -734,7 +778,7 @@ gfta_model_CI_freml <- readRDS("../all_child_models/ci/gfta-model-ci-freml.Rdata
 # create tertiles
 ci_kids3 <- ci_kids %>%
   mutate(tertile=as.factor(ntile(GFTA_Standard, 3))) %>%
-  distinct(ChildStudyID, .keep_all = T) %>%
+  distinct(ChildStudyID, .keep_all = TRUE) %>%
   select(ChildStudyID,tertile,EVT_GSV,GFTA_Standard)
 
 get_med <- ci_kids %>%
@@ -834,10 +878,10 @@ th_kids <- th_kids %>%
 m1_th <- bam(elog ~ Condition.ord +
                   s(Time) +
                   s(Time, by=Condition.ord) +
-                  s(Time, ChildStudyID, bs="fs", m=1) +
-                  s(Time, TargetWord, bs="fs", m=1) +
-                  s(Time, num_visit, bs="fs", m=1) +
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1),
+                  s(Time, ChildStudyID, bs = "fs", m = 1) +
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) +
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1),
                   data=th_kids, method="fREML") 
 
 m_acf_th<- acf_resid(m1_th) # plot the autocorrelation and take a look at correlation between timepoints - yikes!
@@ -849,10 +893,10 @@ r1_th <- start_value_rho(m1_th) # first we calculate rho from the original model
 m_AR1_th <- bam(elog ~   Condition.ord +
                          s(Time) +
                          s(Time, by=Condition.ord) +
-                         s(Time, ChildStudyID, bs="fs", m=1) +
-                         s(Time, TargetWord, bs="fs", m=1) +
-                         s(Time, num_visit, bs="fs", m=1) +
-                         s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1),
+                         s(Time, ChildStudyID, bs = "fs", m = 1) +
+                         s(Time, TargetWord, bs = "fs", m = 1) +
+                         s(Time, num_visit, bs = "fs", m = 1) +
+                         s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1),
                          data=th_kids, method="fREML",
                          rho=r1_th, AR.start=start.event)
 saveRDS(m_AR1_th, "../all_child_models/th/ARI-th.Rdata") 
@@ -872,10 +916,10 @@ age_model_th <- th_kids %>%
                   s(Time) +
                   s(Time, by=Condition.ord) +
                   te(Time,EVT_Age,by=Condition.ord) + 
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs='fs', m=1) + 
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1), 
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) + 
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1), 
                   data=.,
                   rho=r1_th,
                   method="ML",
@@ -891,10 +935,10 @@ evt_model_th <- th_kids %>%
                   s(Time, by=Condition.ord) +
                   te(Time,EVT_Age,by=Condition.ord) + 
                   te(Time,EVT_GSV,by=Condition.ord) + 
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs='fs', m=1) + 
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1), 
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) + 
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1), 
                   data=.,
                   rho=r1_th,
                   method="ML",
@@ -912,10 +956,10 @@ gfta_model_th <- th_kids %>%
                   s(Time, by=Condition.ord,k=15) +
                   te(Time,EVT_Age,by=Condition.ord) + 
                   te(Time,GFTA_Standard,by=Condition.ord) +
-                  s(Time, ChildStudyID, bs='fs', m=1) + 
-                  s(Time, TargetWord, bs='fs', m=1) +
-                  s(Time, num_visit, bs='fs', m=1) + 
-                  s(Time, ChildStudyID, by=Condition.ord, bs='fs', m=1), 
+                  s(Time, ChildStudyID, bs = "fs", m = 1) + 
+                  s(Time, TargetWord, bs = "fs", m = 1) +
+                  s(Time, num_visit, bs = "fs", m = 1) + 
+                  s(Time, ChildStudyID, by=Condition.ord, bs = "fs", m = 1), 
                   data=.,
                   rho=r1_th,
                   method="ML",
@@ -975,13 +1019,13 @@ shoup <- th_kids %>%
 ```{r, audiological-info}
 # get a list of research IDs of kids who were matched to TH; N=15
 matched_cis <- all_kids2 %>%
-  distinct(ResearchID, .keep_all = T) %>%
+  distinct(ResearchID, .keep_all = TRUE) %>%
   filter(Group=='CochlearImplant') %>%
   select(ResearchID) %>%
   mutate(`Matched to child with TH?` = 'Y')
 
 all_cis <- read.csv('../participant_info/audiological_info.csv') %>% 
-  distinct(ResearchID, .keep_all = T) 
+  distinct(ResearchID, .keep_all = TRUE) 
 
 not_matched_cis <- all_cis %>%
   anti_join(.,matched_cis,by=c("ResearchID")) %>%
